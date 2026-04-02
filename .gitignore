@@ -1,0 +1,4 @@
+venv
+payroll.db
+.env
+__pycache__

@@ -1,1 +1,1 @@
-
+backend pips - pip install fastapi uvicorn sqlalchemy pydantic python-dotenv
