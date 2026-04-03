@@ -9,7 +9,8 @@ app = FastAPI()
 @app.get("/")
 def read_root():
     return {"message": "Hello"}
+
 app.include_router(employee.router)
-# app.include_router(attendance.router)
+app.include_router(attendance.router)
 # app.include_router(leave.router)
 # app.include_router(payroll.router)

@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from datetime import date
+from typing import List, Optional
 
 class EmployeeCreate(BaseModel):
     name: str
@@ -12,6 +13,10 @@ class AttendanceCreate(BaseModel):
     employee_id: int
     date: date
     status: str
+
+
+class BulkAttendanceCreate(BaseModel):
+    records: List[AttendanceCreate]
 
 class LeaveCreate(BaseModel):
     employee_id: int
