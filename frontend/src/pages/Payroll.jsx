@@ -1,5 +1,6 @@
 import { useState } from "react";
 import API from "../api/api";
+import toast from "react-hot-toast";
 
 export default function Payroll() {
   const [form, setForm] = useState({
@@ -11,11 +12,16 @@ export default function Payroll() {
   const [result, setResult] = useState(null);
 
   const fetchPayroll = async () => {
+    if (!form.employee_id || !form.month || !form.year) {
+      return toast.error("All fields required");
+    }
+
     const res = await API.get(
       `/payroll/${form.employee_id}?month=${form.month}&year=${form.year}`
     );
 
     setResult(res.data);
+    toast.success("Payroll calculated");
   };
 
   return (
@@ -26,6 +32,7 @@ export default function Payroll() {
         <input
           placeholder="Employee ID"
           className="border p-2 w-full"
+          type="number"
           onChange={(e) =>
             setForm({ ...form, employee_id: e.target.value })
           }
@@ -34,14 +41,16 @@ export default function Payroll() {
         <input
           placeholder="Month (1-12)"
           className="border p-2 w-full"
+          type="number"
           onChange={(e) =>
             setForm({ ...form, month: e.target.value })
           }
         />
 
         <input
-          placeholder="Year"
+          placeholder="Year (2000-2100)"
           className="border p-2 w-full"
+          type="number"
           onChange={(e) =>
             setForm({ ...form, year: e.target.value })
           }

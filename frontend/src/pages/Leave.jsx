@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import API from "../api/api";
+import toast from "react-hot-toast";
 
 export default function Leave() {
   const [leaves, setLeaves] = useState([]);
@@ -22,18 +23,16 @@ export default function Leave() {
   const applyLeave = async (e) => {
     e.preventDefault();
 
+    if (!form.employee_id || !form.start_date || !form.end_date) {
+      return toast.error("All fields required");
+    }
+
     await API.post("/leave/apply", {
       ...form,
       employee_id: Number(form.employee_id)
     });
 
-    setForm({
-      employee_id: "",
-      start_date: "",
-      end_date: "",
-      reason: ""
-    });
-
+    toast.success("Leave applied");
     fetchLeaves();
   };
 
@@ -51,6 +50,7 @@ export default function Leave() {
           placeholder="Employee ID"
           className="border p-2 w-full"
           value={form.employee_id}
+          type="number"
           onChange={(e) =>
             setForm({ ...form, employee_id: e.target.value })
           }

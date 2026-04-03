@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import API from "../api/api";
+import toast from "react-hot-toast";
 
 export default function Employees() {
   const [employees, setEmployees] = useState([]);
@@ -22,10 +23,20 @@ export default function Employees() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (!form.name || !form.role || !form.salary_amount) {
+      return toast.error("All fields are required");
+    }
+
+    if (Number(form.salary_amount) <= 0) {
+      return toast.error("Salary must be greater than 0");
+    }
+
     await API.post("/employees/", {
       ...form,
       salary_amount: Number(form.salary_amount)
     });
+
+    toast.success("Employee added");
 
     setForm({ name: "", role: "", salary_type: "Monthly", salary_amount: "" });
     fetchEmployees();

@@ -7,6 +7,8 @@ cd frontend
 npm install
 npm install axios
 npm install tailwindcss @tailwindcss/vite
+npm install react-hot-toast
+npm install react-icons
 
 vite.config.ts
 import { defineConfig } from 'vite'
