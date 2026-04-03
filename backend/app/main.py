@@ -2,20 +2,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, Base
 from .routers import employee, attendance, leave, payroll
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Payroll SaaS API")
 
-
 # CORS (required for frontend)
-origins = [
-    "http://localhost:3000",   # React dev
-    "http://localhost:5173",   # React dev
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:5173",
-    "*"  # for now (you can restrict later)
-]
+origins = os.getenv("ALLOWED_ORIGINS", "").split(",") if os.getenv("ALLOWED_ORIGINS") else ["http://localhost:5173", "http://localhost:5173"]
 
 app.add_middleware(
     CORSMiddleware,

@@ -1,8 +1,10 @@
 import axios from "axios";
 import toast from "react-hot-toast";
 
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+
 const API = axios.create({
-  baseURL: "http://localhost:8000",
+  baseURL: BACKEND_URL || "http://localhost:8000",
 });
 
 API.interceptors.response.use(
