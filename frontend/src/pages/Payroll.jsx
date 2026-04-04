@@ -16,6 +16,13 @@ export default function Payroll() {
       return toast.error("All fields required");
     }
 
+    if (form.month < 1 || form.month > 12) {
+      return toast.error("Month must be between 1 and 12");
+    }
+    if (form.year < 2000 || form.year > 2100) {
+      return toast.error("Year must be between 2000 and 2100");
+    }
+
     const res = await API.get(
       `/payroll/${form.employee_id}?month=${form.month}&year=${form.year}`
     );
@@ -51,6 +58,8 @@ export default function Payroll() {
           placeholder="Year (2000-2100)"
           className="border p-2 w-full"
           type="number"
+          min="2000"
+          max="2100"
           onChange={(e) =>
             setForm({ ...form, year: e.target.value })
           }
