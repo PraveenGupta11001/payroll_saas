@@ -1,0 +1,22 @@
+docker run -d \
+  --name payroll_postgres \
+  -e POSTGRES_USER=payroll_user \
+  -e POSTGRES_PASSWORD=strongpassword123 \
+  -e POSTGRES_DB=payroll_db \
+  -p 5432:5432 \
+  -v postgres_data:/var/lib/postgresql/data \
+  --restart=no \
+  postgres:17
+
+
+docker run -d \
+  --name payroll_redis \
+  -p 6379:6379 \
+  -v redis_data:/data \
+  --restart=no \
+  redis:7 redis-server --requirepass redisStrongPass456
+
+lsof -i :5173
+kill -9 $(lsof -t -i:5173)
+
+pip install passlib==1.7.4 bcrypt==3.2.2

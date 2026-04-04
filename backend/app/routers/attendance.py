@@ -1,116 +1,95 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from ..utils.db_utils import get_db
+from datetime import date
+from ..utils.auth_utils import get_db, get_current_user, require_org_role
 from .. import models, schemas
 
 router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
-@router.post("/")
-def mark_attendance(attendance: schemas.AttendanceCreate, db: Session = Depends(get_db)):
+# --- Helper ---
+_attendance_manager = Depends(require_org_role(["OWNER", "MANAGER", "EDITOR"]))
 
-    # Check employee exists
+@router.post("/", response_model=schemas.AttendanceOut)
+def mark_attendance(
+    attendance: schemas.AttendanceCreate, 
+    org_id: int, 
+    db: Session = Depends(get_db), 
+    _membership: models.OrganizationMember = _attendance_manager
+):
+    # Verify employee exists and belongs to the organization
     employee = db.query(models.Employee).filter(
-        models.Employee.id == attendance.employee_id
+        models.Employee.id == attendance.employee_id,
+        models.Employee.org_id == org_id
     ).first()
-
     if not employee:
-        raise HTTPException(status_code=404, detail="Employee not found")
+        raise HTTPException(status_code=404, detail="Employee not found in this organization")
 
+    # Update or create attendance for the day
     existing = db.query(models.Attendance).filter(
         models.Attendance.employee_id == attendance.employee_id,
         models.Attendance.date == attendance.date
     ).first()
 
-    # UPDATE if exists
     if existing:
-        existing.status = attendance.status.value
+        existing.status = attendance.status
         db.commit()
         db.refresh(existing)
-
-        return {
-            "message": "Attendance updated",
-            "data": existing
-        }
-
-    # CREATE if not exists
-    record = models.Attendance(
+        return existing
+    
+    new_att = models.Attendance(
         employee_id=attendance.employee_id,
         date=attendance.date,
-        status=attendance.status.value
+        status=attendance.status
     )
-
-    db.add(record)
+    db.add(new_att)
     db.commit()
-    db.refresh(record)
+    db.refresh(new_att)
+    return new_att
 
-    return {
-        "message": "Attendance created",
-        "data": record
-    }
-
-
-# BULK Attendance API (CREATE + UPDATE)
-@router.post("/bulk")
-def bulk_attendance(data: schemas.BulkAttendanceCreate, db: Session = Depends(get_db)):
-
-    created = 0
-    updated = 0
-    skipped = 0
-
-    for item in data.records:
-
-        # Validate employee exists
-        employee = db.query(models.Employee).filter(
-            models.Employee.id == item.employee_id
-        ).first()
-
-        if not employee:
-            skipped += 1
+@router.post("/bulk", response_model=list[schemas.AttendanceOut])
+def mark_bulk_attendance(
+    bulk: schemas.BulkAttendanceCreate, 
+    org_id: int, 
+    db: Session = Depends(get_db), 
+    _membership: models.OrganizationMember = _attendance_manager
+):
+    results = []
+    # Identify all employee IDs in this org for the bulk operation
+    org_employee_ids = [e.id for e in db.query(models.Employee).filter(models.Employee.org_id == org_id).all()]
+    
+    for record in bulk.records:
+        if record.employee_id not in org_employee_ids:
             continue
-
-        # Check existing record
+            
         existing = db.query(models.Attendance).filter(
-            models.Attendance.employee_id == item.employee_id,
-            models.Attendance.date == item.date
+            models.Attendance.employee_id == record.employee_id,
+            models.Attendance.date == record.date
         ).first()
 
-        # Update
         if existing:
-            existing.status = item.status.value
-            updated += 1
-
-        # Create
+            existing.status = record.status
         else:
-            record = models.Attendance(
-                employee_id=item.employee_id,
-                date=item.date,
-                status=item.status.value
+            existing = models.Attendance(
+                employee_id=record.employee_id,
+                date=record.date,
+                status=record.status
             )
-            db.add(record)
-            created += 1
-
+            db.add(existing)
+        results.append(existing)
+        
     db.commit()
+    for r in results:
+        db.refresh(r)
+    return results
 
-    return {
-        "message": "Bulk attendance processed",
-        "created": created,
-        "updated": updated,
-        "skipped_invalid_employees": skipped
-    }
-
-
-# Get all attendance records
-@router.get("/")
-def get_all_attendance(db: Session = Depends(get_db)):
-    return db.query(models.Attendance).all()
-
-
-# Get Attendance by Employee ID
-@router.get("/{employee_id}")
-def get_attendance(employee_id: int, db: Session = Depends(get_db)):
-
-    records = db.query(models.Attendance).filter(
-        models.Attendance.employee_id == employee_id
+@router.get("/", response_model=list[schemas.AttendanceOut])
+def get_attendance(
+    org_id: int, 
+    date_val: date = Query(default=date.today()), 
+    db: Session = Depends(get_db), 
+    _membership: models.OrganizationMember = _attendance_manager
+):
+    return db.query(models.Attendance).join(models.Employee).filter(
+        models.Employee.org_id == org_id,
+        models.Attendance.date == date_val
     ).all()
-
-    return records

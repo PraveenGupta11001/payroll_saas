@@ -1,112 +1,74 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from ..utils.db_utils import get_db
+from ..utils.auth_utils import get_db, get_current_user, require_org_role
 from .. import models, schemas
 
-router = APIRouter(prefix="/leave", tags=["Leave"])
+router = APIRouter(prefix="/leave", tags=["Leaves"])
 
+# --- Helper ---
+_leave_manager = Depends(require_org_role(["OWNER", "MANAGER", "EDITOR"]))
 
-# Apply Leave
-@router.post("/apply")
-def apply_leave(leave: schemas.LeaveCreate, db: Session = Depends(get_db)):
-
-    # Check employee exists
+@router.post("/", response_model=schemas.LeaveOut)
+def request_leave(
+    leave: schemas.LeaveCreate, 
+    org_id: int, 
+    db: Session = Depends(get_db), 
+    _membership: models.OrganizationMember = _leave_manager
+):
+    # Verify employee exists and belongs to organization
     employee = db.query(models.Employee).filter(
-        models.Employee.id == leave.employee_id
+        models.Employee.id == leave.employee_id,
+        models.Employee.org_id == org_id
     ).first()
-
     if not employee:
-        raise HTTPException(status_code=404, detail="Employee not found")
-
-    # Validate date range
-    if leave.start_date > leave.end_date:
-        raise HTTPException(
-            status_code=400,
-            detail="Start date cannot be after end date"
-        )
-
-    # Prevent duplicate leave (same employee + same date range)
-    existing = db.query(models.Leave).filter(
-        models.Leave.employee_id == leave.employee_id,
-        models.Leave.start_date == leave.start_date,
-        models.Leave.end_date == leave.end_date
-    ).first()
-
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail="Leave already applied for this date range"
-        )
+        raise HTTPException(status_code=404, detail="Employee not found in this organization")
 
     new_leave = models.Leave(
         employee_id=leave.employee_id,
         start_date=leave.start_date,
         end_date=leave.end_date,
-        reason=leave.reason.strip(),
+        reason=leave.reason,
         status="Pending"
     )
-
     db.add(new_leave)
     db.commit()
     db.refresh(new_leave)
+    return new_leave
 
-    return {
-        "message": "Leave applied successfully",
-        "data": new_leave
-    }
-
-
-# Update Leave Status (Approve / Reject)
-@router.put("/{leave_id}")
-def update_leave_status(
-    leave_id: int,
-    data: schemas.LeaveUpdateStatus,
-    db: Session = Depends(get_db)
+@router.get("/", response_model=list[schemas.LeaveOut])
+def get_leaves(
+    org_id: int, 
+    db: Session = Depends(get_db), 
+    _membership: models.OrganizationMember = _leave_manager
 ):
+    # Fetch all leaves for employees in this organization
+    leaves = db.query(models.Leave).join(models.Employee).filter(
+        models.Employee.org_id == org_id
+    ).all()
+    
+    # Simple formatting to add employee names
+    for l in leaves:
+        l.employee_name = l.employee.name
+    return leaves
 
-    leave = db.query(models.Leave).filter(
-        models.Leave.id == leave_id
+@router.put("/{id}/status", response_model=schemas.LeaveOut)
+def update_leave_status(
+    id: int, 
+    org_id: int,
+    status_update: schemas.LeaveUpdateStatus, 
+    db: Session = Depends(get_db), 
+    _membership: models.OrganizationMember = _leave_manager
+):
+    # Verify leave belongs to an employee in this org
+    leave = db.query(models.Leave).join(models.Employee).filter(
+        models.Leave.id == id,
+        models.Employee.org_id == org_id
     ).first()
 
     if not leave:
-        raise HTTPException(status_code=404, detail="Leave not found")
+        raise HTTPException(status_code=404, detail="Leave request not found")
 
-    # Validate status
-    if data.status.value not in ["Approved", "Rejected"]:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid status"
-        )
-
-    leave.status = data.status.value
+    leave.status = status_update.status
     db.commit()
     db.refresh(leave)
-
-    return {
-        "message": f"Leave status updated to {data.status.value}",
-        "data": leave
-    }
-
-
-# Get all leaves
-@router.get("/")
-def get_leaves(db: Session = Depends(get_db)):
-    return db.query(models.Leave).all()
-
-
-# Get leaves by employee
-@router.get("/{employee_id}")
-def get_leaves_by_employee(employee_id: int, db: Session = Depends(get_db)):
-
-    employee = db.query(models.Employee).filter(
-        models.Employee.id == employee_id
-    ).first()
-
-    if not employee:
-        raise HTTPException(status_code=404, detail="Employee not found")
-
-    leaves = db.query(models.Leave).filter(
-        models.Leave.employee_id == employee_id
-    ).all()
-
-    return leaves
+    return leave
